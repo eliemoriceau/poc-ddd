@@ -5,11 +5,11 @@ last_updated: 08-27-2026 12:00
 project: poc-event-ddd
 project_key: NOKEY
 tracking_system: file-system
-story_location: "_bmad-output/implementation-artifacts"
+story_location: '_bmad-output/implementation-artifacts'
 
 development_status:
-  epic-1: backlog
-  1-1-creer-une-commande-selon-son-service: backlog
+  epic-1: in-progress
+  1-1-creer-une-commande-selon-son-service: review
   1-2-ajouter-et-fusionner-les-lignes-d-une-commande: backlog
   1-3-confirmer-une-commande-non-vide: backlog
   1-4-annuler-une-commande-selon-son-etat: backlog

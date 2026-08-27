@@ -20,6 +20,14 @@ export interface Users {
   updated_at: Timestamp | null;
 }
 
+export interface Orders {
+  id: string;
+  service_type: string;
+  table_id: string | null;
+  status: string;
+}
+
 export interface DB {
   users: Users;
+  orders: Orders;
 }
