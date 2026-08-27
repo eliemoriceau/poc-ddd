@@ -11,6 +11,13 @@ export type Generated<T> = T extends ColumnType<infer S, infer I, infer U>
 
 export type Timestamp = ColumnType<Date, Date | string, Date | string>;
 
+export interface Orders {
+  id: string;
+  service_type: string;
+  status: string;
+  table_id: string | null;
+}
+
 export interface Users {
   created_at: Generated<Timestamp>;
   email: string;
@@ -20,14 +27,7 @@ export interface Users {
   updated_at: Timestamp | null;
 }
 
-export interface Orders {
-  id: string;
-  service_type: string;
-  table_id: string | null;
-  status: string;
-}
-
 export interface DB {
-  users: Users;
   orders: Orders;
+  users: Users;
 }
