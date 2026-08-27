@@ -6,6 +6,8 @@ export default {
 	arrowParens: 'always',
 	bracketSpacing: true,
 	ignorePatterns: [
+		'**/_bmad/**',
+		'**/_bmad-output/**',
 		'**/.adonisjs/**',
 		'**/build/**',
 		'**/tmp/**',
