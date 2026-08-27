@@ -19,6 +19,7 @@ apps/*/public/assets
 packages/*/storybook-static
 
 # Build tools specific
+.corepack/
 .yarn/*
 !.yarn/patches
 !.yarn/plugins
@@ -35,3 +36,8 @@ yarn-error.log
 
 # Platform specific
 .DS_Store
+
+# Test artifacts
+test-results/
+playwright-report/
+coverage/
