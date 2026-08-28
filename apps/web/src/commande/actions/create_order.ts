@@ -1,9 +1,9 @@
 import { inject } from '@adonisjs/core';
 import { Order } from '#commande/domain/order';
 import { OrderIdentifier } from '#commande/domain/order_identifier';
-import { ServiceTypeValueObject, type ServiceTypeError } from '#commande/domain/service_type';
+import { OrderService, type ServiceTypeError } from '#commande/domain/order_service';
 import { OrderRepository } from '#commande/repositories/order_repository';
-import { err, type Result } from '#core/result';
+import { err, ok, type Result } from '#core/result';
 import { TransactionManager } from '#shared/services/transaction_manager';
 
 export interface CreateOrderParams {
@@ -21,7 +21,7 @@ export class CreateOrder {
 	) {}
 
 	async execute(params: CreateOrderParams): Promise<CreateOrderResult> {
-		const service = ServiceTypeValueObject.create(params.serviceType, params.tableId);
+		const service = OrderService.create(params.serviceType, params.tableId);
 
 		if (!service.ok) {
 			return err(service.error);
@@ -29,6 +29,6 @@ export class CreateOrder {
 
 		const order = Order.createDraft(OrderIdentifier.generate(), service.value);
 
-		return this.transactions.run(() => this.orders.createOrder(order));
+		return this.transactions.run(async () => ok(await this.orders.createOrder(order)));
 	}
 }

@@ -1,9 +1,8 @@
 import { inject } from '@adonisjs/core';
 import { Order } from '#commande/domain/order';
 import { OrderIdentifier } from '#commande/domain/order_identifier';
-import { OrderStatus } from '#commande/domain/order_status';
-import { ServiceTypeValueObject } from '#commande/domain/service_type';
-import { ok, type Result } from '#core/result';
+import { OrderService } from '#commande/domain/order_service';
+import { parseOrderStatus } from '#commande/domain/order_status';
 import { TransactionManager } from '#shared/services/transaction_manager';
 import type { Orders } from '#types/db';
 import type { Selectable } from 'kysely';
@@ -15,7 +14,7 @@ type OrderRecord = Pick<Selectable<Orders>, (typeof orderColumns)[number]>;
 export class OrderRepository {
 	constructor(private readonly transactions: TransactionManager) {}
 
-	async createOrder(order: Order): Promise<Result<Order, never>> {
+	async createOrder(order: Order): Promise<Order> {
 		const record = await this.transactions
 			.currentDatabase()
 			.insertInto('orders')
@@ -28,7 +27,7 @@ export class OrderRepository {
 			.returning(orderColumns)
 			.executeTakeFirstOrThrow();
 
-		return ok(this.#toDomain(record));
+		return this.#toDomain(record);
 	}
 
 	async findOrderById(id: OrderIdentifier): Promise<Order | null> {
@@ -43,13 +42,13 @@ export class OrderRepository {
 	}
 
 	#toDomain(record: OrderRecord) {
-		const service = ServiceTypeValueObject.create(record.service_type, record.table_id);
+		const service = OrderService.create(record.service_type, record.table_id);
 
 		if (!service.ok) {
 			throw new Error(`Invalid service persisted for order ${record.id}`);
 		}
 
-		const status = Object.values(OrderStatus).find((value) => value === record.status);
+		const status = parseOrderStatus(record.status);
 
 		if (!status) {
 			throw new Error(`Invalid status persisted for order ${record.id}`);

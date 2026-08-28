@@ -1,7 +1,7 @@
 import { test } from '@japa/runner';
 import { CreateOrder, type CreateOrderParams } from '#commande/actions/create_order';
 import { Order } from '#commande/domain/order';
-import { ok } from '#core/result';
+import { OrderStatus } from '#commande/domain/order_status';
 import type { OrderRepository } from '#commande/repositories/order_repository';
 import type { TransactionManager } from '#shared/services/transaction_manager';
 
@@ -9,7 +9,7 @@ function makeAction(receivedOrder?: (order: Order) => void, transactions: Partia
 	const orders = {
 		createOrder(order: Order) {
 			receivedOrder?.(order);
-			return Promise.resolve(ok(order));
+			return Promise.resolve(order);
 		},
 	} as OrderRepository;
 
@@ -37,9 +37,9 @@ test.group('CreateOrder', () => {
 		assert.match(result.value.id, /^[0-9a-f-]{36}$/iu);
 		assert.equal(result.value.serviceType, 'DineIn');
 		assert.equal(result.value.tableId, tableId);
-		assert.equal(result.value.status, 'Draft');
+		assert.equal(result.value.status, OrderStatus.Draft);
 		assert.equal(received?.tableId, tableId);
-		assert.equal(received?.status, 'Draft');
+		assert.equal(received?.status, OrderStatus.Draft);
 	});
 
 	test('crée une commande Takeaway sans table', async ({ assert }) => {
@@ -54,7 +54,7 @@ test.group('CreateOrder', () => {
 		}
 		assert.equal(result.value.serviceType, 'Takeaway');
 		assert.isNull(result.value.tableId);
-		assert.equal(result.value.status, 'Draft');
+		assert.equal(result.value.status, OrderStatus.Draft);
 	});
 
 	const invalidCases: Array<[string, CreateOrderParams, string]> = [

@@ -6,3 +6,15 @@ export const OrderStatus = {
 } as const;
 
 export type OrderStatus = (typeof OrderStatus)[keyof typeof OrderStatus];
+
+export function parseOrderStatus(value: string): OrderStatus | null {
+	switch (value) {
+		case OrderStatus.Draft:
+		case OrderStatus.Confirmed:
+		case OrderStatus.SentToKitchen:
+		case OrderStatus.Cancelled:
+			return value;
+		default:
+			return null;
+	}
+}
