@@ -1,0 +1,33 @@
+# Codex adapter for the bmad-build review stage.
+# The native BMAD subagent API is preferred by the workflow when available.
+# Codex uses this explicit read-only subprocess adapter instead.
+
+[workflow]
+
+[[workflow.review_layers]]
+id = "blind-hunter"
+name = "Blind Hunter"
+instruction = """
+Run `{project-root}/scripts/bmad-codex-reviewer.sh blind-hunter` and provide the complete `{diff_output}` on stdin. Wait for the command to finish and return its output only.
+"""
+
+[[workflow.review_layers]]
+id = "edge-case-hunter"
+name = "Edge Case Hunter"
+instruction = """
+Run `{project-root}/scripts/bmad-codex-reviewer.sh edge-case-hunter` and provide the complete `{diff_output}` on stdin. Wait for the command to finish and return its output only.
+"""
+
+[[workflow.review_layers]]
+id = "verification-gap"
+name = "Verification Gap Reviewer"
+instruction = """
+Run `{project-root}/scripts/bmad-codex-reviewer.sh verification-gap` and provide the complete `{diff_output}` on stdin. Wait for the command to finish and return its output only.
+"""
+
+[[workflow.oneshot_review_layers]]
+id = "blind-hunter"
+name = "Blind Hunter"
+instruction = """
+Run `{project-root}/scripts/bmad-codex-reviewer.sh blind-hunter` and provide the complete diff of the current worktree on stdin. Wait for the command to finish and return its output only.
+"""
