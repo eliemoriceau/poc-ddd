@@ -7,21 +7,56 @@ import { OrderRepository } from '#commande/repositories/order_repository';
 import { up } from '#database/migrations/1761955200000_create_orders_table';
 import { db } from '#shared/services/db';
 import { TransactionManager } from '#shared/services/transaction_manager';
+import type { Assert } from '@japa/assert';
 
 const tableId = '11111111-1111-4111-8111-111111111111';
+const testSchema = `order_persistence_test_${process.pid}_${randomUUID().replaceAll('-', '')}`;
+
+function isPostgresConstraintError(error: unknown): error is { code: string; constraint_name: string } {
+	return (
+		typeof error === 'object' &&
+		error !== null &&
+		'code' in error &&
+		typeof error.code === 'string' &&
+		'constraint_name' in error &&
+		typeof error.constraint_name === 'string'
+	);
+}
+
+async function assertConstraintViolation(assert: Assert, query: () => Promise<unknown>, constraint: string) {
+	let error: unknown;
+
+	try {
+		await query();
+	} catch (caught) {
+		error = caught;
+	}
+
+	if (!error) {
+		assert.fail(`Expected PostgreSQL constraint ${constraint} to reject the query`);
+	}
+
+	if (!isPostgresConstraintError(error)) {
+		assert.fail(`Expected PostgreSQL constraint error for ${constraint}`);
+	}
+
+	assert.equal(error.code, '23514');
+	assert.equal(error.constraint_name, constraint);
+}
 
 test.group('Persistance PostgreSQL de Order', (group) => {
 	group.setup(async () => {
-		await db.schema.dropTable('orders').ifExists().execute();
-		await up(db);
+		await db.schema.dropSchema(testSchema).ifExists().cascade().execute();
+		await db.schema.createSchema(testSchema).execute();
+		await up(db.withSchema(testSchema));
 	});
 
 	group.teardown(async () => {
-		await db.schema.dropTable('orders').ifExists().execute();
+		await db.schema.dropSchema(testSchema).ifExists().cascade().execute();
 	});
 
 	test('crée et recharge les deux services avec leur état Draft', async ({ assert }) => {
-		const orders = new OrderRepository(new TransactionManager());
+		const orders = new OrderRepository(new TransactionManager(), testSchema);
 		const action = new CreateOrder(orders, new TransactionManager());
 
 		const dineIn = await action.execute({ serviceType: 'DineIn', tableId });
@@ -48,23 +83,35 @@ test.group('Persistance PostgreSQL de Order', (group) => {
 	});
 
 	test('applique les contraintes service/table et statut', async ({ assert }) => {
-		await assert.rejects(() =>
-			db
-				.insertInto('orders')
-				.values({ id: randomUUID(), service_type: 'DineIn', table_id: null, status: OrderStatus.Draft })
-				.execute(),
+		await assertConstraintViolation(
+			assert,
+			() =>
+				db
+					.withSchema(testSchema)
+					.insertInto('orders')
+					.values({ id: randomUUID(), service_type: 'DineIn', table_id: null, status: OrderStatus.Draft })
+					.execute(),
+			'orders_service_table_check',
 		);
-		await assert.rejects(() =>
-			db
-				.insertInto('orders')
-				.values({ id: randomUUID(), service_type: 'Takeaway', table_id: tableId, status: OrderStatus.Draft })
-				.execute(),
+		await assertConstraintViolation(
+			assert,
+			() =>
+				db
+					.withSchema(testSchema)
+					.insertInto('orders')
+					.values({ id: randomUUID(), service_type: 'Takeaway', table_id: tableId, status: OrderStatus.Draft })
+					.execute(),
+			'orders_service_table_check',
 		);
-		await assert.rejects(() =>
-			db
-				.insertInto('orders')
-				.values({ id: randomUUID(), service_type: 'Takeaway', table_id: null, status: 'Unknown' })
-				.execute(),
+		await assertConstraintViolation(
+			assert,
+			() =>
+				db
+					.withSchema(testSchema)
+					.insertInto('orders')
+					.values({ id: randomUUID(), service_type: 'Takeaway', table_id: null, status: 'Unknown' })
+					.execute(),
+			'orders_status_check',
 		);
 	});
 

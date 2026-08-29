@@ -12,11 +12,15 @@ type OrderRecord = Pick<Selectable<Orders>, (typeof orderColumns)[number]>;
 
 @inject()
 export class OrderRepository {
-	constructor(private readonly transactions: TransactionManager) {}
+	constructor(
+		private readonly transactions: TransactionManager,
+		private readonly schema = 'public',
+	) {}
 
 	async createOrder(order: Order): Promise<Order> {
 		const record = await this.transactions
 			.currentDatabase()
+			.withSchema(this.schema)
 			.insertInto('orders')
 			.values({
 				id: order.id,
@@ -33,6 +37,7 @@ export class OrderRepository {
 	async findOrderById(id: OrderIdentifier): Promise<Order | null> {
 		const record = await this.transactions
 			.currentDatabase()
+			.withSchema(this.schema)
 			.selectFrom('orders')
 			.select(orderColumns)
 			.where('id', '=', id.toString())
