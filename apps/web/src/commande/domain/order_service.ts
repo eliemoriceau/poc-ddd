@@ -31,9 +31,13 @@ interface OrderServiceProperties {
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 
 export class OrderService extends ValueObject<OrderServiceProperties> {
-	static create(value: string, tableId: string | null | undefined): Result<OrderService, ServiceTypeError> {
+	static create(value: unknown, tableId: unknown): Result<OrderService, ServiceTypeError> {
 		if (value !== ServiceType.DineIn && value !== ServiceType.Takeaway) {
 			return err({ type: 'invalid_service_type' });
+		}
+
+		if (tableId !== null && tableId !== undefined && typeof tableId !== 'string') {
+			return err({ type: 'invalid_table_id' });
 		}
 
 		const normalizedTableId = tableId === null || tableId === undefined ? null : tableId.toLowerCase();

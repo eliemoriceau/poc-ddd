@@ -78,7 +78,7 @@ context:
 
 **Commands:**
 
-- `yarn workspace @boilerplate/web test --files=tests/unit/commande/create_order.spec.ts` -- attendu : tous les tests de la story passent.
+- `yarn workspace @boilerplate/web test --suites=unit,integration` -- attendu : tous les tests unitaires et d’intégration de la story passent.
 - `yarn lint` -- attendu : aucune erreur Oxlint.
 - `yarn format` -- attendu : tous les fichiers sont conformes à Oxfmt.
 - `yarn typecheck` -- attendu : tous les workspaces compilent.

@@ -63,6 +63,7 @@ test.group('CreateOrder', () => {
 		['refuse Takeaway avec table', { serviceType: 'Takeaway', tableId }, 'table_forbidden_for_takeaway'],
 		['refuse un identifiant de table invalide', { serviceType: 'DineIn', tableId: 'not-a-uuid' }, 'invalid_table_id'],
 		['refuse un identifiant de table vide', { serviceType: 'DineIn', tableId: '' }, 'invalid_table_id'],
+		['refuse un identifiant de table non textuel', { serviceType: 'DineIn', tableId: 42 }, 'invalid_table_id'],
 	];
 
 	for (const [description, params, errorType] of invalidCases) {

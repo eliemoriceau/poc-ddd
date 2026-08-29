@@ -7,8 +7,8 @@ import { err, ok, type Result } from '#core/result';
 import { TransactionManager } from '#shared/services/transaction_manager';
 
 export interface CreateOrderParams {
-	serviceType: string;
-	tableId?: string | null;
+	serviceType: unknown;
+	tableId?: unknown;
 }
 
 export type CreateOrderResult = Result<Order, ServiceTypeError>;
