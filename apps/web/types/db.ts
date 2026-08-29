@@ -11,6 +11,14 @@ export type Generated<T> = T extends ColumnType<infer S, infer I, infer U>
 
 export type Timestamp = ColumnType<Date, Date | string, Date | string>;
 
+export interface OrderLines {
+  menu_item_id: string;
+  name: string;
+  order_id: string;
+  quantity: number;
+  unit_price_cents: number;
+}
+
 export interface Orders {
   id: string;
   service_type: string;
@@ -28,6 +36,7 @@ export interface Users {
 }
 
 export interface DB {
+  order_lines: OrderLines;
   orders: Orders;
   users: Users;
 }
