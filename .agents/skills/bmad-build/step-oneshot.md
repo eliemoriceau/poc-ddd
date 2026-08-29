@@ -17,6 +17,8 @@ Implement the clarified intent directly.
 
 ### Review
 
+When running in Codex and the native `multi_agent_v1__spawn_agent` tool is available, use it for every active review layer. The text `Launch a subagent` is an instruction to call that native tool, not to open a new chat and not to run `codex exec`. Spawn one agent per active layer in the same assistant turn with `fork_context: false`, put the fully substituted layer instruction in the agent prompt, then collect all agents with `multi_agent_v1__wait_agent`. Do not use `create_thread`, `fork_thread`, or an external CLI for these reviewers. If the native tool is unavailable, use the fallback below and stop as instructed.
+
 Execute these review layers in parallel wherever their execution methods allow. After substituting runtime placeholders, when an instruction launches a reviewer subagent, launch that child with the prompt text; do not load the reviewer instruction file yourself. For any other customized instruction, execute it as written:
 
 {workflow.oneshot_review_layers}

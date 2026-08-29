@@ -18,6 +18,8 @@ Do NOT `git add` anything — this is read-only inspection.
 
 ### Review
 
+When running in Codex and the native `multi_agent_v1__spawn_agent` tool is available, use it for every active review layer. The text `Launch a subagent` is an instruction to call that native tool, not to open a new chat and not to run `codex exec`. Spawn one agent per active layer in the same assistant turn with `fork_context: false`; put the fully substituted layer instruction in the agent prompt. After all agents have been launched, collect them with `multi_agent_v1__wait_agent` in one blocking wait. Do not use `create_thread`, `fork_thread`, or an external CLI for these reviewers. If the native tool is unavailable, use the fallback below and stop as instructed.
+
 Execute these review layers in parallel wherever their execution methods allow: substitute the runtime placeholders (e.g. `{diff_output}`) into each layer's instruction. When an instruction launches a reviewer subagent, launch that child with the prompt text after placeholder substitution; do not load the reviewer instruction file yourself. For any other customized instruction, execute it as written. Parallel means several blocking calls awaited together in this turn — never backgrounded or detached, never ending the turn to await results. When running layers as subagents, spawn every reviewer before reading or reacting to any of their output; begin collection and triage only once all are launched.
 
 {workflow.review_layers}

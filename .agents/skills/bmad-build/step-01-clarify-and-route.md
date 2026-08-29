@@ -61,7 +61,7 @@ If the spec is an epic story and `{{.implementation_artifacts}}/sprint-status.ya
 
      3. **Compile epic context.** Produce `{{.implementation_artifacts}}/epic-<N>-context.md` by following `[[bmad-snapshot:compile-epic-context.md]]`, in order of preference:
         - **Preferred — subagent:** spawn a subagent synchronously (wait for it to return in this turn) with `[[bmad-snapshot:compile-epic-context.md]]` as its prompt. Pass it the epic number, the epics file path, the `{{.planning_artifacts}}` directory, and the output path `{{.implementation_artifacts}}/epic-<N>-context.md`.
-        - **Fallback — inline** (for runtimes without subagent support, e.g. Copilot, Codex, local Ollama, older Claude): if your runtime cannot spawn subagents, or the spawn fails/times out, read `[[bmad-snapshot:compile-epic-context.md]]` yourself and follow its instructions to produce the same output file.
+        - **Fallback — inline** (for runtimes without native subagent support): if your runtime cannot spawn subagents, or the spawn fails/times out, read `[[bmad-snapshot:compile-epic-context.md]]` yourself and follow its instructions to produce the same output file.
 
      4. **Verify.** After compilation, verify the output file exists, is non-empty, and starts with `# Epic <N> Context:`. If valid, load it. If verification fails, HALT and report the failure.
 
