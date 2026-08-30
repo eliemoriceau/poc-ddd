@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { test } from '@japa/runner';
 import { sql } from 'kysely';
 import { AddOrderLine } from '#commande/actions/add_order_line';
+import { ConfirmOrder } from '#commande/actions/confirm_order';
 import { CreateOrder } from '#commande/actions/create_order';
 import { Order } from '#commande/domain/order';
 import { OrderService } from '#commande/domain/order_service';
@@ -197,6 +198,93 @@ test.group('Persistance PostgreSQL de Order', (group) => {
 
 		const reloaded = await orders.findOrderById(created.value.getIdentifier());
 		assert.equal(reloaded?.lines[0].quantity, 5);
+	});
+
+	test('confirme et recharge une commande sans modifier ses lignes ni son service', async ({ assert }) => {
+		const orders = new OrderRepository(new TransactionManager(), testSchema);
+		const create = new CreateOrder(orders, new TransactionManager());
+		const created = await create.execute({ serviceType: 'DineIn', tableId });
+		assert.isTrue(created.ok);
+
+		if (!created.ok) {
+			return;
+		}
+
+		const add = new AddOrderLine(orders, new TransactionManager());
+		assert.isTrue(
+			(
+				await add.execute({
+					orderId: created.value.id,
+					menuItemId: tableId,
+					name: 'Pizza',
+					quantity: 2,
+					unitPriceCents: 1250,
+				})
+			).ok,
+		);
+
+		const confirmed = await new ConfirmOrder(orders, new TransactionManager()).execute({ orderId: created.value.id });
+		assert.isTrue(confirmed.ok);
+
+		if (!confirmed.ok) {
+			return;
+		}
+
+		assert.equal(confirmed.value.status, OrderStatus.Confirmed);
+		const reloaded = await orders.findOrderById(created.value.getIdentifier());
+		assert.equal(reloaded?.status, OrderStatus.Confirmed);
+		assert.equal(reloaded?.serviceType, 'DineIn');
+		assert.equal(reloaded?.tableId, tableId);
+		assert.deepEqual(
+			reloaded?.lines.map((line) => [line.name, line.quantity, line.unitPriceCents]),
+			[['Pizza', 2, 1250]],
+		);
+	});
+
+	test('refuse la confirmation vide et annule la transition si la persistance échoue', async ({ assert }) => {
+		const orders = new OrderRepository(new TransactionManager(), testSchema);
+		const create = new CreateOrder(orders, new TransactionManager());
+		const empty = await create.execute({ serviceType: 'Takeaway' });
+		assert.isTrue(empty.ok);
+
+		if (!empty.ok) {
+			return;
+		}
+
+		const confirmation = new ConfirmOrder(orders, new TransactionManager());
+		const emptyResult = await confirmation.execute({ orderId: empty.value.id });
+		assert.deepEqual(emptyResult, { ok: false, error: { type: 'order_empty' } });
+
+		await sql
+			.raw(
+				`CREATE FUNCTION "${testSchema}".fail_order_update() RETURNS trigger LANGUAGE plpgsql AS 'BEGIN IF NEW.status = ''Confirmed'' THEN RAISE EXCEPTION ''forced order update failure''; END IF; RETURN NEW; END;'`,
+			)
+			.execute(db);
+		await sql
+			.raw(
+				`CREATE TRIGGER fail_order_update BEFORE UPDATE OF status ON "${testSchema}".orders FOR EACH ROW EXECUTE FUNCTION "${testSchema}".fail_order_update()`,
+			)
+			.execute(db);
+
+		const add = new AddOrderLine(orders, new TransactionManager());
+		assert.isTrue(
+			(
+				await add.execute({
+					orderId: empty.value.id,
+					menuItemId: tableId,
+					name: 'Pizza',
+					quantity: 1,
+					unitPriceCents: 1250,
+				})
+			).ok,
+		);
+
+		await assert.rejects(() => confirmation.execute({ orderId: empty.value.id }), 'forced order update failure');
+		const reloaded = await orders.findOrderById(empty.value.getIdentifier());
+		assert.equal(reloaded?.status, OrderStatus.Draft);
+		assert.lengthOf(reloaded?.lines ?? [], 1);
+		await sql.raw(`DROP TRIGGER fail_order_update ON "${testSchema}".orders`).execute(db);
+		await sql.raw(`DROP FUNCTION "${testSchema}".fail_order_update()`).execute(db);
 	});
 
 	test('synchronise la base quand l’agrégat restauré ne contient plus de lignes', async ({ assert }) => {
