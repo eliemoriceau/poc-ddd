@@ -14,7 +14,7 @@ Local verification passed after installing dependencies: `yarn lint`, `yarn form
 
 ## Step 2: Generate CI Pipeline
 
-GitHub Actions was selected from the `github.com` remote. `.github/workflows/test.yml` contains lint, parallel unit/integration test jobs, burn-in, and report stages. Tests use a Postgres 18 service, Yarn cache keyed by `yarn.lock`, Japa retries, and failure-only NDJSON artifacts.
+GitHub Actions was selected from the `github.com` remote. `.github/workflows/test.yml` contains lint, parallel unit/integration test jobs, burn-in, and report stages. Tests use a Postgres 18 service, an explicit Yarn cache keyed by `yarn.lock`, Japa retries, and failure-only NDJSON artifacts. The cache is initialized after Corepack so setup-node does not invoke Yarn before it is available.
 
 ## Step 3: Quality Gates
 
