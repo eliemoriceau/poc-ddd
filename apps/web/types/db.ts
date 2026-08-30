@@ -9,7 +9,17 @@ export type Generated<T> = T extends ColumnType<infer S, infer I, infer U>
   ? ColumnType<S, I | undefined, U>
   : ColumnType<T, T | undefined, T>;
 
+export type Int8 = ColumnType<string, bigint | number | string, bigint | number | string>;
+
 export type Timestamp = ColumnType<Date, Date | string, Date | string>;
+
+export interface OrderLines {
+  menu_item_id: string;
+  name: string;
+  order_id: string;
+  quantity: Int8;
+  unit_price_cents: Int8;
+}
 
 export interface Orders {
   id: string;
@@ -28,6 +38,7 @@ export interface Users {
 }
 
 export interface DB {
+  order_lines: OrderLines;
   orders: Orders;
   users: Users;
 }
