@@ -1,0 +1,158 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  NODE_ENV: test
+  TZ: UTC
+  HOST: localhost
+  LOG_LEVEL: warn
+  APP_KEY: 0123456789abcdef0123456789abcdef
+  APP_URL: http://localhost:3333
+  SESSION_DRIVER: memory
+  DATABASE_URL: postgres://app:app@localhost:5432/app_test
+
+jobs:
+  lint:
+    name: Lint, format and typecheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: yarn
+      - name: Enable Corepack
+        run: corepack enable
+      - name: Install dependencies
+        run: yarn install --immutable
+      - name: Lint
+        run: yarn lint
+      - name: Check formatting
+        run: yarn format
+      - name: Typecheck
+        run: yarn typecheck
+
+  test:
+    name: Tests (${{ matrix.suite }})
+    needs: lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [unit, integration]
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: app
+          POSTGRES_DB: app_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U app -d app_test"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: yarn
+      - name: Enable Corepack
+        run: corepack enable
+      - name: Install dependencies
+        run: yarn install --immutable
+      - name: Run Japa suite
+        env:
+          TEST_SUITE: ${{ matrix.suite }}
+        run: |
+          # Security: matrix values are data passed to a fixed command.
+          set -o pipefail
+          yarn workspace @boilerplate/web test "$TEST_SUITE" --retries=2 --reporters=ndjson 2>&1 | tee "test-results-$TEST_SUITE.ndjson"
+      - name: Upload test diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-diagnostics-${{ matrix.suite }}
+          path: test-results-${{ matrix.suite }}.ndjson
+          if-no-files-found: warn
+          retention-days: 30
+
+  burn-in:
+    name: Burn-in (10 iterations)
+    needs: test
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: app
+          POSTGRES_DB: app_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U app -d app_test"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: yarn
+      - name: Enable Corepack
+        run: corepack enable
+      - name: Install dependencies
+        run: yarn install --immutable
+      - name: Run burn-in
+        run: scripts/burn-in.sh
+      - name: Upload burn-in diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: burn-in-diagnostics
+          path: burn-in-results.ndjson
+          if-no-files-found: warn
+          retention-days: 30
+
+  report:
+    name: CI summary
+    needs: [lint, test, burn-in]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish summary
+        env:
+          LINT_RESULT: ${{ needs.lint.result }}
+          TEST_RESULT: ${{ needs.test.result }}
+          BURN_IN_RESULT: ${{ needs.burn-in.result }}
+        run: |
+          {
+            echo "## CI summary"
+            echo ""
+            echo "| Gate | Result |"
+            echo "| --- | --- |"
+            echo "| Lint, format, typecheck | $LINT_RESULT |"
+            echo "| Unit and integration tests | $TEST_RESULT |"
+            echo "| Burn-in | $BURN_IN_RESULT |"
+          } >> "$GITHUB_STEP_SUMMARY"
