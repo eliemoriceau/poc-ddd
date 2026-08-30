@@ -56,14 +56,32 @@ test('ne tente pas values([]) pour un agrégat sans lignes', async ({ assert }) 
 	}
 
 	const order = Order.createDraft(OrderIdentifier.generate(), service.value);
+	let inserted = false;
 	const transactions = {
 		currentDatabase() {
-			throw new Error('La base ne doit pas être consultée');
+			return {
+				withSchema() {
+					return {
+						deleteFrom() {
+							return {
+								where() {
+									return { execute: async () => undefined };
+								},
+							};
+						},
+						insertInto() {
+							inserted = true;
+							throw new Error('values([]) interdit');
+						},
+					};
+				},
+			};
 		},
 	};
 
 	const saved = await new OrderRepository(transactions as never).saveOrder(order);
 	assert.isTrue(saved.equals(order));
+	assert.isFalse(inserted);
 });
 
 test('convertit les colonnes bigint string et bigint en nombres sûrs', async ({ assert }) => {

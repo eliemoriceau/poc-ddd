@@ -58,12 +58,30 @@ export class OrderLine extends ValueObject<OrderLineProperties> {
 	}
 
 	static restore(properties: OrderLineProperties) {
-		const validated = OrderLine.create(
+		return OrderLine.#restoreValidated(
 			properties.menuItemId.toString(),
 			properties.name,
 			properties.quantity,
 			properties.unitPrice.cents,
 		);
+	}
+
+	static restoreFromPersistence(properties: {
+		menuItemId: unknown;
+		name: unknown;
+		quantity: unknown;
+		unitPriceCents: unknown;
+	}) {
+		return OrderLine.#restoreValidated(
+			properties.menuItemId,
+			properties.name,
+			properties.quantity,
+			properties.unitPriceCents,
+		);
+	}
+
+	static #restoreValidated(menuItemId: unknown, name: unknown, quantity: unknown, unitPriceCents: unknown) {
+		const validated = OrderLine.create(menuItemId, name, quantity, unitPriceCents);
 
 		if (!validated.ok) {
 			throw new Error(`Invalid order line state: ${validated.error.type}`);
@@ -97,6 +115,11 @@ export class OrderLine extends ValueObject<OrderLineProperties> {
 			return err({ type: 'order_line_quantity_overflow' });
 		}
 
-		return ok(OrderLine.restore({ ...this.props, quantity: this.quantity + quantity }));
+		return ok(
+			OrderLine.restore({
+				...this.props,
+				quantity: this.quantity + quantity,
+			}),
+		);
 	}
 }

@@ -4,6 +4,8 @@ import { test } from '@japa/runner';
 import { sql } from 'kysely';
 import { AddOrderLine } from '#commande/actions/add_order_line';
 import { CreateOrder } from '#commande/actions/create_order';
+import { Order } from '#commande/domain/order';
+import { OrderService } from '#commande/domain/order_service';
 import { OrderStatus } from '#commande/domain/order_status';
 import { OrderRepository } from '#commande/repositories/order_repository';
 import { up } from '#database/migrations/1761955200000_create_orders_table';
@@ -195,6 +197,47 @@ test.group('Persistance PostgreSQL de Order', (group) => {
 
 		const reloaded = await orders.findOrderById(created.value.getIdentifier());
 		assert.equal(reloaded?.lines[0].quantity, 5);
+	});
+
+	test('synchronise la base quand l’agrégat restauré ne contient plus de lignes', async ({ assert }) => {
+		const orders = new OrderRepository(new TransactionManager(), testSchema);
+		const create = new CreateOrder(orders, new TransactionManager());
+		const created = await create.execute({ serviceType: 'Takeaway' });
+		assert.isTrue(created.ok);
+
+		if (!created.ok) {
+			return;
+		}
+
+		const add = new AddOrderLine(orders, new TransactionManager());
+		assert.isTrue(
+			(
+				await add.execute({
+					orderId: created.value.id,
+					menuItemId: tableId,
+					name: 'Pizza',
+					quantity: 1,
+					unitPriceCents: 1250,
+				})
+			).ok,
+		);
+		const service = OrderService.create('Takeaway', null);
+		assert.isTrue(service.ok);
+
+		if (!service.ok) {
+			return;
+		}
+
+		const empty = Order.restore({
+			id: created.value.getIdentifier(),
+			service: service.value,
+			status: OrderStatus.Draft,
+			lines: [],
+		});
+		await new TransactionManager().run(() => orders.saveOrder(empty));
+
+		const reloaded = await orders.findOrderById(created.value.getIdentifier());
+		assert.lengthOf(reloaded?.lines ?? [], 0);
 	});
 
 	test('annule toute la transaction quand la persistance échoue', async ({ assert }) => {

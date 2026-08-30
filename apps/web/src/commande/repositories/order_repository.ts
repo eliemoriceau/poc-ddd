@@ -1,11 +1,9 @@
 import { inject } from '@adonisjs/core';
-import { MenuItemIdentifier } from '#commande/domain/menu_item_identifier';
 import { Order } from '#commande/domain/order';
 import { OrderIdentifier } from '#commande/domain/order_identifier';
 import { OrderLine } from '#commande/domain/order_line';
 import { OrderService } from '#commande/domain/order_service';
 import { parseOrderStatus } from '#commande/domain/order_status';
-import { Price } from '#commande/domain/price';
 import { TransactionManager } from '#shared/services/transaction_manager';
 import type { OrderLines, Orders } from '#types/db';
 import type { Selectable } from 'kysely';
@@ -49,12 +47,22 @@ export class OrderRepository {
 
 	async saveOrder(order: Order): Promise<Order> {
 		const lines = order.lines;
+		const database = this.transactions.currentDatabase().withSchema(this.schema);
 
 		if (lines.length === 0) {
+			await database.deleteFrom('order_lines').where('order_id', '=', order.id).execute();
 			return order;
 		}
 
-		const database = this.transactions.currentDatabase().withSchema(this.schema);
+		await database
+			.deleteFrom('order_lines')
+			.where('order_id', '=', order.id)
+			.where(
+				'menu_item_id',
+				'not in',
+				lines.map((line) => line.menuItemId),
+			)
+			.execute();
 
 		await database
 			.insertInto('order_lines')
@@ -120,26 +128,14 @@ export class OrderRepository {
 			service: service.value,
 			status,
 			lines: lineRecords.map((line) => {
-				const menuItemId = MenuItemIdentifier.create(line.menu_item_id);
-				const price = Price.create(this.#toSafeNumber(line.unit_price_cents, 'unit_price_cents'));
+				const price = this.#toSafeNumber(line.unit_price_cents, 'unit_price_cents');
 				const quantity = this.#toSafeNumber(line.quantity, 'quantity');
 
-				if (
-					!menuItemId.ok ||
-					!price.ok ||
-					typeof line.name !== 'string' ||
-					line.name.trim() === '' ||
-					!Number.isSafeInteger(quantity) ||
-					quantity <= 0
-				) {
-					throw new Error(`Invalid order line persisted for order ${record.id}`);
-				}
-
-				return OrderLine.restore({
-					menuItemId: menuItemId.value,
+				return OrderLine.restoreFromPersistence({
+					menuItemId: line.menu_item_id,
 					name: line.name,
 					quantity,
-					unitPrice: price.value,
+					unitPriceCents: price,
 				});
 			}),
 		});

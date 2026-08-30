@@ -93,6 +93,17 @@ Le prix doit être persisté comme entier `unit_price_cents`; le domaine ne doit
   - `[medium][patch]` Tests ajoutés pour les statuts non-Draft via l’Action, sans sauvegarde ni mutation.
   - `[medium][patch]` Test ajouté pour l’échec de sauvegarde et l’absence de commit partiel.
 
+### 2026-08-30 — Corrections des retours de revue
+
+- intent_gap: 0
+- bad_spec: 0
+- patch: 2: (high 0, medium 2, low 0)
+- defer: 0
+- reject: 16: (high 0, medium 5, low 11)
+- addressed_findings:
+  - `[medium][patch]` `saveOrder` synchronise désormais les lignes absentes de l’agrégat, y compris lorsque celui-ci ne contient aucune ligne ; tests unitaires et PostgreSQL ajoutés.
+  - `[medium][patch]` La reconstruction d’une ligne depuis PostgreSQL passe par `OrderLine.restoreFromPersistence`, supprimant la validation dupliquée du repository.
+
 ## Auto Run Result
 
 - Résumé : implémentation complète de l’ajout et de la fusion des lignes d’une commande `Draft`, avec invariants métier, persistance PostgreSQL atomique et sérialisation des ajouts concurrents.
@@ -101,6 +112,13 @@ Le prix doit être persisté comme entier `unit_price_cents`; le domaine ne doit
 - Revue de suivi : recommandée ; 5 constats medium et 1 low corrigés, score `3 × 5 + 1 × 1 = 16`.
 - Vérifications : `yarn workspace @boilerplate/web test --suites=unit,integration` — 52 tests réussis ; `yarn lint` — réussi ; `yarn format` — réussi ; `yarn typecheck` — réussi ; `yarn test` — 52 tests réussis ; `git diff --check` — réussi.
 - Risques résiduels : aucun dans le périmètre de la story. Les tests utilisent PostgreSQL local et des schémas isolés par processus.
+
+- Résumé complémentaire : corrections des deux retours thermo-nucléaires retenus ; persistance complète des lignes et mapping de restauration centralisé.
+- Fichiers modifiés : `apps/web/src/commande/repositories/order_repository.ts` — synchronisation des suppressions et agrégats vides ; `apps/web/src/commande/domain/order_line.ts` — factory de restauration persistence ; tests unitaires et intégration PostgreSQL — couverture de ces comportements ; ce spec — journal de revue mis à jour.
+- Revue : 2 patchs appliqués, 0 élément différé, 16 constats rejetés.
+- Revue de suivi recommandée : oui ; 0 high, 2 medium, 0 low ; score `3 × 2 + 0 × 1 = 6`.
+- Vérifications : 59 tests unitaires/intégration réussis, `yarn lint`, `yarn format`, `yarn typecheck` et `git diff --check` réussis.
+- Risques résiduels : aucun risque identifié dans le périmètre de cette story.
 
 ### 2026-08-30 — Corrections de revue thermo-nucléaire
 
