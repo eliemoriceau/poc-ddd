@@ -22,6 +22,12 @@ export class Order extends Entity<OrderProperties> {
 	}
 
 	static restore(properties: OrderProperties) {
+		const menuItemIds = new Set(properties.lines.map((line) => line.menuItemId));
+
+		if (menuItemIds.size !== properties.lines.length) {
+			throw new Error('Duplicate menu item in order lines');
+		}
+
 		return new Order({ ...properties, lines: [...properties.lines] });
 	}
 

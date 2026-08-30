@@ -102,6 +102,13 @@ Le prix doit être persisté comme entier `unit_price_cents`; le domaine ne doit
 - Vérifications : `yarn workspace @boilerplate/web test --suites=unit,integration` — 52 tests réussis ; `yarn lint` — réussi ; `yarn format` — réussi ; `yarn typecheck` — réussi ; `yarn test` — 52 tests réussis ; `git diff --check` — réussi.
 - Risques résiduels : aucun dans le périmètre de la story. Les tests utilisent PostgreSQL local et des schémas isolés par processus.
 
+### 2026-08-30 — Corrections de revue thermo-nucléaire
+
+- 8 corrections appliquées : validation de `addQuantity`, restauration validée des lignes, détection des doublons dans `Order`, passage des montants et quantités en `bigint`, mapping sûr des valeurs `bigint`, upsert conservant le nom/prix initiaux, gestion d’un agrégat sans lignes et preuves PostgreSQL de rollback/FK/cascade.
+- 0 élément différé ; les constats restants concernant le contrat d’injection partagé, la granularité de tests et la documentation de suivi ont été rejetés comme préexistants, non bloquants ou déjà couverts par l’architecture existante.
+- Vérifications finales : 58 tests unitaires/intégration réussis, `yarn test` réussi, `yarn lint` réussi, `yarn format` réussi, `yarn typecheck` réussi et `git diff --check` réussi.
+- Revue de suivi recommandée : oui, en raison de corrections de sévérité élevée portant sur les invariants de l’agrégat ; score de cette passe : 2 high, 4 medium, 2 low.
+
 ## Verification
 
 **Commands:**

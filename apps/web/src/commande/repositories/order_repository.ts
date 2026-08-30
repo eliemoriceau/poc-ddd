@@ -48,12 +48,18 @@ export class OrderRepository {
 	}
 
 	async saveOrder(order: Order): Promise<Order> {
+		const lines = order.lines;
+
+		if (lines.length === 0) {
+			return order;
+		}
+
 		const database = this.transactions.currentDatabase().withSchema(this.schema);
 
 		await database
 			.insertInto('order_lines')
 			.values(
-				order.lines.map((line) => ({
+				lines.map((line) => ({
 					order_id: order.id,
 					menu_item_id: line.menuItemId,
 					name: line.name,
@@ -63,9 +69,7 @@ export class OrderRepository {
 			)
 			.onConflict((conflict) =>
 				conflict.columns(['order_id', 'menu_item_id']).doUpdateSet((values) => ({
-					name: values.ref('excluded.name'),
 					quantity: values.ref('excluded.quantity'),
-					unit_price_cents: values.ref('excluded.unit_price_cents'),
 				})),
 			)
 			.execute();
@@ -117,15 +121,16 @@ export class OrderRepository {
 			status,
 			lines: lineRecords.map((line) => {
 				const menuItemId = MenuItemIdentifier.create(line.menu_item_id);
-				const price = Price.create(line.unit_price_cents);
+				const price = Price.create(this.#toSafeNumber(line.unit_price_cents, 'unit_price_cents'));
+				const quantity = this.#toSafeNumber(line.quantity, 'quantity');
 
 				if (
 					!menuItemId.ok ||
 					!price.ok ||
 					typeof line.name !== 'string' ||
 					line.name.trim() === '' ||
-					!Number.isSafeInteger(line.quantity) ||
-					line.quantity <= 0
+					!Number.isSafeInteger(quantity) ||
+					quantity <= 0
 				) {
 					throw new Error(`Invalid order line persisted for order ${record.id}`);
 				}
@@ -133,10 +138,20 @@ export class OrderRepository {
 				return OrderLine.restore({
 					menuItemId: menuItemId.value,
 					name: line.name,
-					quantity: line.quantity,
+					quantity,
 					unitPrice: price.value,
 				});
 			}),
 		});
+	}
+
+	#toSafeNumber(value: string | number | bigint, field: string) {
+		const number = typeof value === 'string' || typeof value === 'bigint' ? Number(value) : value;
+
+		if (!Number.isSafeInteger(number)) {
+			throw new Error(`Invalid ${field} persisted`);
+		}
+
+		return number;
 	}
 }

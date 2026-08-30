@@ -43,4 +43,18 @@ test.group('OrderLine', () => {
 		assert.isTrue(price.ok);
 		assert.isTrue(identifier.ok);
 	});
+
+	test('refuse de restaurer une ligne invalide', ({ assert }) => {
+		const identifier = MenuItemIdentifier.fromString('not-a-uuid');
+		const price = Price.create(100);
+
+		if (!price.ok) {
+			return;
+		}
+
+		assert.throws(
+			() => OrderLine.restore({ menuItemId: identifier, name: ' ', quantity: 0, unitPrice: price.value } as never),
+			'Invalid order line state',
+		);
+	});
 });

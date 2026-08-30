@@ -13,7 +13,6 @@ export interface InvalidOrderLineQuantityError {
 export interface OrderLineQuantityOverflowError {
 	type: 'order_line_quantity_overflow';
 }
-export const MAX_POSTGRES_INTEGER = 2_147_483_647;
 export type OrderLineError =
 	| InvalidOrderLineNameError
 	| InvalidOrderLineQuantityError
@@ -45,12 +44,7 @@ export class OrderLine extends ValueObject<OrderLineProperties> {
 			return err({ type: 'invalid_order_line_name' });
 		}
 
-		if (
-			typeof quantity !== 'number' ||
-			!Number.isSafeInteger(quantity) ||
-			quantity <= 0 ||
-			quantity > MAX_POSTGRES_INTEGER
-		) {
+		if (typeof quantity !== 'number' || !Number.isSafeInteger(quantity) || quantity <= 0) {
 			return err({ type: 'invalid_order_line_quantity' });
 		}
 
@@ -64,7 +58,18 @@ export class OrderLine extends ValueObject<OrderLineProperties> {
 	}
 
 	static restore(properties: OrderLineProperties) {
-		return new OrderLine(properties);
+		const validated = OrderLine.create(
+			properties.menuItemId.toString(),
+			properties.name,
+			properties.quantity,
+			properties.unitPrice.cents,
+		);
+
+		if (!validated.ok) {
+			throw new Error(`Invalid order line state: ${validated.error.type}`);
+		}
+
+		return validated.value;
 	}
 
 	get menuItemId() {
@@ -83,8 +88,12 @@ export class OrderLine extends ValueObject<OrderLineProperties> {
 		return this.props.unitPrice.cents;
 	}
 
-	addQuantity(quantity: number): Result<OrderLine, OrderLineQuantityOverflowError> {
-		if (this.quantity > MAX_POSTGRES_INTEGER - quantity) {
+	addQuantity(quantity: number): Result<OrderLine, InvalidOrderLineQuantityError | OrderLineQuantityOverflowError> {
+		if (!Number.isSafeInteger(quantity) || quantity <= 0) {
+			return err({ type: 'invalid_order_line_quantity' });
+		}
+
+		if (!Number.isSafeInteger(this.quantity + quantity)) {
 			return err({ type: 'order_line_quantity_overflow' });
 		}
 

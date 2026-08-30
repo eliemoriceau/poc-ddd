@@ -1,7 +1,7 @@
 import { test } from '@japa/runner';
 import { Order } from '#commande/domain/order';
 import { OrderIdentifier } from '#commande/domain/order_identifier';
-import { MAX_POSTGRES_INTEGER, OrderLine } from '#commande/domain/order_line';
+import { OrderLine } from '#commande/domain/order_line';
 import { OrderService } from '#commande/domain/order_service';
 import { OrderStatus } from '#commande/domain/order_status';
 
@@ -63,13 +63,49 @@ test.group('Order.addLine', () => {
 		assert.lengthOf(restored.lines, 1);
 	});
 
-	test('refuse le dépassement de la capacité integer PostgreSQL sans mutation', ({ assert }) => {
+	test('refuse plusieurs lignes pour le même menuItemId', ({ assert }) => {
+		const service = OrderService.create('DineIn', tableId);
+
+		if (!service.ok) {
+			return;
+		}
+
+		assert.throws(
+			() =>
+				Order.restore({
+					id: OrderIdentifier.generate(),
+					service: service.value,
+					status: OrderStatus.Draft,
+					lines: [makeLine('Pizza', 1, 1250), makeLine('Pizza bis', 2, 1500)],
+				}),
+			'Duplicate menu item in order lines',
+		);
+	});
+
+	test('refuse les quantités invalides ajoutées sans mutation', ({ assert }) => {
 		const order = makeOrder();
-		order.addLine(makeLine('Pizza', MAX_POSTGRES_INTEGER, 1250));
+		order.addLine(makeLine('Pizza', 1, 1250));
+		const invalidLine = OrderLine.create(menuItemId, 'Pizza', 1, 1250);
+
+		if (!invalidLine.ok) {
+			throw new Error('invalid test line');
+		}
+
+		for (const quantity of [0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1]) {
+			const result = invalidLine.value.addQuantity(quantity);
+			assert.deepEqual(result, { ok: false, error: { type: 'invalid_order_line_quantity' } });
+		}
+
+		assert.equal(order.lines[0].quantity, 1);
+	});
+
+	test('refuse le dépassement d’un entier sûr sans mutation', ({ assert }) => {
+		const order = makeOrder();
+		order.addLine(makeLine('Pizza', Number.MAX_SAFE_INTEGER, 1250));
 		const result = order.addLine(makeLine('Pizza', 1, 1250));
 
 		assert.deepEqual(result, { ok: false, error: { type: 'order_line_quantity_overflow' } });
-		assert.equal(order.lines[0].quantity, MAX_POSTGRES_INTEGER);
+		assert.equal(order.lines[0].quantity, Number.MAX_SAFE_INTEGER);
 	});
 
 	for (const status of [OrderStatus.Confirmed, OrderStatus.SentToKitchen, OrderStatus.Cancelled]) {

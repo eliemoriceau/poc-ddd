@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { test } from '@japa/runner';
+import { sql } from 'kysely';
 import { AddOrderLine } from '#commande/actions/add_order_line';
 import { CreateOrder } from '#commande/actions/create_order';
 import { OrderStatus } from '#commande/domain/order_status';
@@ -152,7 +153,7 @@ test.group('Persistance PostgreSQL de Order', (group) => {
 					menuItemId: tableId,
 					name: 'Pizza',
 					quantity: 2,
-					unitPriceCents: 1250,
+					unitPriceCents: 2_147_483_648,
 				})
 			).ok,
 		);
@@ -172,7 +173,7 @@ test.group('Persistance PostgreSQL de Order', (group) => {
 		assert.lengthOf(reloaded?.lines ?? [], 1);
 		assert.equal(reloaded?.lines[0].quantity, 5);
 		assert.equal(reloaded?.lines[0].name, 'Pizza');
-		assert.equal(reloaded?.lines[0].unitPriceCents, 1250);
+		assert.equal(reloaded?.lines[0].unitPriceCents, 2_147_483_648);
 	});
 
 	test('additionne deux ajouts concurrents sans perte', async ({ assert }) => {
@@ -194,6 +195,51 @@ test.group('Persistance PostgreSQL de Order', (group) => {
 
 		const reloaded = await orders.findOrderById(created.value.getIdentifier());
 		assert.equal(reloaded?.lines[0].quantity, 5);
+	});
+
+	test('annule toute la transaction quand la persistance échoue', async ({ assert }) => {
+		const orders = new OrderRepository(new TransactionManager(), testSchema);
+		const create = new CreateOrder(orders, new TransactionManager());
+		const created = await create.execute({ serviceType: 'Takeaway' });
+		assert.isTrue(created.ok);
+
+		if (!created.ok) {
+			return;
+		}
+
+		await sql
+			.raw(
+				`CREATE FUNCTION "${testSchema}".fail_order_line_insert() RETURNS trigger LANGUAGE plpgsql AS 'BEGIN RAISE EXCEPTION ''forced persistence failure''; END;'`,
+			)
+			.execute(db);
+		await sql
+			.raw(
+				`CREATE TRIGGER fail_order_line_insert BEFORE INSERT ON "${testSchema}".order_lines FOR EACH ROW EXECUTE FUNCTION "${testSchema}".fail_order_line_insert()`,
+			)
+			.execute(db);
+
+		const add = new AddOrderLine(orders, new TransactionManager());
+		await assert.rejects(
+			() =>
+				add.execute({
+					orderId: created.value.id,
+					menuItemId: tableId,
+					name: 'Pizza',
+					quantity: 1,
+					unitPriceCents: 1250,
+				}),
+			'forced persistence failure',
+		);
+
+		const persistedLines = await db
+			.withSchema(testSchema)
+			.selectFrom('order_lines')
+			.select('order_id')
+			.where('order_id', '=', created.value.id)
+			.execute();
+		assert.lengthOf(persistedLines, 0);
+		await sql.raw(`DROP TRIGGER fail_order_line_insert ON "${testSchema}".order_lines`).execute(db);
+		await sql.raw(`DROP FUNCTION "${testSchema}".fail_order_line_insert()`).execute(db);
 	});
 
 	test('protège l’unicité, la quantité et le prix des lignes', async ({ assert }) => {
@@ -250,5 +296,25 @@ test.group('Persistance PostgreSQL de Order', (group) => {
 					.execute(),
 			'order_lines_name_check',
 		);
+
+		const cascadeOrderId = randomUUID();
+		await db
+			.withSchema(testSchema)
+			.insertInto('orders')
+			.values({ id: cascadeOrderId, service_type: 'Takeaway', table_id: null, status: OrderStatus.Draft })
+			.execute();
+		await db
+			.withSchema(testSchema)
+			.insertInto('order_lines')
+			.values({ order_id: cascadeOrderId, menu_item_id: randomUUID(), name: 'Pizza', quantity: 1, unit_price_cents: 0 })
+			.execute();
+		await db.withSchema(testSchema).deleteFrom('orders').where('id', '=', cascadeOrderId).execute();
+		const cascadedLines = await db
+			.withSchema(testSchema)
+			.selectFrom('order_lines')
+			.select('order_id')
+			.where('order_id', '=', cascadeOrderId)
+			.execute();
+		assert.lengthOf(cascadedLines, 0);
 	});
 });
