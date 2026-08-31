@@ -36,6 +36,17 @@ test('utilise le schéma public par défaut pour la persistance de Order', async
 						},
 					};
 				},
+				updateTable() {
+					return {
+						set() {
+							return {
+								where() {
+									return { executeTakeFirstOrThrow: async () => ({ numUpdatedRows: 1n }) };
+								},
+							};
+						},
+					};
+				},
 			};
 		},
 	};
@@ -72,6 +83,17 @@ test('ne tente pas values([]) pour un agrégat sans lignes', async ({ assert }) 
 						insertInto() {
 							inserted = true;
 							throw new Error('values([]) interdit');
+						},
+						updateTable() {
+							return {
+								set() {
+									return {
+										where() {
+											return { executeTakeFirstOrThrow: async () => ({ numUpdatedRows: 1n }) };
+										},
+									};
+								},
+							};
 						},
 					};
 				},
@@ -114,6 +136,17 @@ test('convertit les colonnes bigint string et bigint en nombres sûrs', async ({
 													}
 												: undefined,
 										execute: async () => (table === 'order_lines' ? records : []),
+									};
+								},
+							};
+						},
+						updateTable() {
+							return {
+								set() {
+									return {
+										where() {
+											return { executeTakeFirstOrThrow: async () => ({ numUpdatedRows: 1n }) };
+										},
 									};
 								},
 							};

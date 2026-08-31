@@ -49,6 +49,16 @@ export class OrderRepository {
 		const lines = order.lines;
 		const database = this.transactions.currentDatabase().withSchema(this.schema);
 
+		const updatedOrder = await database
+			.updateTable('orders')
+			.set({ status: order.status })
+			.where('id', '=', order.id)
+			.executeTakeFirstOrThrow();
+
+		if (updatedOrder.numUpdatedRows === 0n) {
+			throw new Error(`Order ${order.id} not found while saving`);
+		}
+
 		if (lines.length === 0) {
 			await database.deleteFrom('order_lines').where('order_id', '=', order.id).execute();
 			return order;

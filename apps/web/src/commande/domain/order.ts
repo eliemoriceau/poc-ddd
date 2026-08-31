@@ -16,6 +16,12 @@ export interface OrderNotDraftError {
 	type: 'order_not_draft';
 }
 
+export interface OrderEmptyError {
+	type: 'order_empty';
+}
+
+export type OrderConfirmationError = OrderNotDraftError | OrderEmptyError;
+
 export class Order extends Entity<OrderProperties> {
 	static createDraft(id: OrderIdentifier, service: OrderService) {
 		return new Order({ id, service, status: OrderStatus.Draft, lines: [] });
@@ -49,6 +55,19 @@ export class Order extends Entity<OrderProperties> {
 
 	get lines() {
 		return [...this.props.lines];
+	}
+
+	confirm(): Result<void, OrderConfirmationError> {
+		if (this.status !== OrderStatus.Draft) {
+			return err({ type: 'order_not_draft' });
+		}
+
+		if (this.props.lines.length === 0) {
+			return err({ type: 'order_empty' });
+		}
+
+		this.props.status = OrderStatus.Confirmed;
+		return ok(undefined);
 	}
 
 	addLine(line: OrderLine): Result<void, OrderNotDraftError | import('#commande/domain/order_line').OrderLineError> {

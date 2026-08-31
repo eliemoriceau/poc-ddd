@@ -117,3 +117,31 @@ test.group('Order.addLine', () => {
 		});
 	}
 });
+
+test.group('Order.confirm', () => {
+	test('confirme une commande Draft non vide', ({ assert }) => {
+		const order = makeOrder(OrderStatus.Draft, [makeLine('Pizza', 1, 1250)]);
+
+		const result = order.confirm();
+
+		assert.deepEqual(result, { ok: true, value: undefined });
+		assert.equal(order.status, OrderStatus.Confirmed);
+		assert.equal(order.lines[0].name, 'Pizza');
+	});
+
+	test('refuse une commande Draft vide', ({ assert }) => {
+		const order = makeOrder();
+
+		assert.deepEqual(order.confirm(), { ok: false, error: { type: 'order_empty' } });
+		assert.equal(order.status, OrderStatus.Draft);
+	});
+
+	for (const status of [OrderStatus.Confirmed, OrderStatus.SentToKitchen, OrderStatus.Cancelled]) {
+		test(`priorise l’état ${status} pour une commande vide`, ({ assert }) => {
+			const order = makeOrder(status);
+
+			assert.deepEqual(order.confirm(), { ok: false, error: { type: 'order_not_draft' } });
+			assert.equal(order.status, status);
+		});
+	}
+});
