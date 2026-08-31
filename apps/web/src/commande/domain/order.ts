@@ -16,6 +16,10 @@ export interface OrderNotDraftError {
 	type: 'order_not_draft';
 }
 
+export interface OrderNotCancellableError {
+	type: 'order_not_cancellable';
+}
+
 export class Order extends Entity<OrderProperties> {
 	static createDraft(id: OrderIdentifier, service: OrderService) {
 		return new Order({ id, service, status: OrderStatus.Draft, lines: [] });
@@ -49,6 +53,20 @@ export class Order extends Entity<OrderProperties> {
 
 	get lines() {
 		return [...this.props.lines];
+	}
+
+	cancel(): Result<boolean, OrderNotCancellableError> {
+		if (this.status === OrderStatus.Cancelled) {
+			return ok(false);
+		}
+
+		if (this.status !== OrderStatus.Draft && this.status !== OrderStatus.Confirmed) {
+			return err({ type: 'order_not_cancellable' });
+		}
+
+		this.props.status = OrderStatus.Cancelled;
+
+		return ok(true);
 	}
 
 	addLine(line: OrderLine): Result<void, OrderNotDraftError | import('#commande/domain/order_line').OrderLineError> {

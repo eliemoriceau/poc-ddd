@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { test } from '@japa/runner';
 import { sql } from 'kysely';
 import { AddOrderLine } from '#commande/actions/add_order_line';
+import { CancelOrder } from '#commande/actions/cancel_order';
 import { CreateOrder } from '#commande/actions/create_order';
 import { Order } from '#commande/domain/order';
 import { OrderService } from '#commande/domain/order_service';
@@ -238,6 +239,131 @@ test.group('Persistance PostgreSQL de Order', (group) => {
 
 		const reloaded = await orders.findOrderById(created.value.getIdentifier());
 		assert.lengthOf(reloaded?.lines ?? [], 0);
+	});
+
+	test('annule et recharge une commande avec son état Cancelled', async ({ assert }) => {
+		for (const status of [OrderStatus.Draft, OrderStatus.Confirmed]) {
+			const transactions = new TransactionManager();
+			const orders = new OrderRepository(transactions, testSchema);
+			const create = new CreateOrder(orders, transactions);
+			const created = await create.execute({ serviceType: 'Takeaway' });
+			assert.isTrue(created.ok);
+
+			if (!created.ok) {
+				return;
+			}
+
+			if (status === OrderStatus.Confirmed) {
+				const service = OrderService.create('Takeaway', null);
+				assert.isTrue(service.ok);
+
+				if (!service.ok) {
+					return;
+				}
+
+				await transactions.run(() =>
+					orders.saveOrder(
+						Order.restore({
+							id: created.value.getIdentifier(),
+							service: service.value,
+							status,
+							lines: [],
+						}),
+					),
+				);
+			}
+
+			const cancelled = await new CancelOrder(orders, transactions).execute({ orderId: created.value.id });
+			assert.isTrue(cancelled.ok);
+
+			const reloaded = await orders.findOrderById(created.value.getIdentifier());
+			assert.equal(reloaded?.status, OrderStatus.Cancelled);
+		}
+	});
+
+	test('ne persiste pas une annulation quand la mise à jour de commande échoue', async ({ assert }) => {
+		const transactions = new TransactionManager();
+		const orders = new OrderRepository(transactions, testSchema);
+		const create = new CreateOrder(orders, transactions);
+		const created = await create.execute({ serviceType: 'Takeaway' });
+		assert.isTrue(created.ok);
+
+		if (!created.ok) {
+			return;
+		}
+
+		await sql
+			.raw(
+				`CREATE FUNCTION "${testSchema}".fail_order_update() RETURNS trigger LANGUAGE plpgsql AS 'BEGIN RAISE EXCEPTION ''forced order update failure''; END;'`,
+			)
+			.execute(db);
+		await sql
+			.raw(
+				`CREATE TRIGGER fail_order_update BEFORE UPDATE OF status ON "${testSchema}".orders FOR EACH ROW EXECUTE FUNCTION "${testSchema}".fail_order_update()`,
+			)
+			.execute(db);
+
+		try {
+			await assert.rejects(
+				() => new CancelOrder(orders, transactions).execute({ orderId: created.value.id }),
+				'forced order update failure',
+			);
+
+			const persisted = await orders.findOrderById(created.value.getIdentifier());
+			assert.equal(persisted?.status, OrderStatus.Draft);
+		} finally {
+			await sql.raw(`DROP TRIGGER fail_order_update ON "${testSchema}".orders`).execute(db);
+			await sql.raw(`DROP FUNCTION "${testSchema}".fail_order_update()`).execute(db);
+		}
+	});
+
+	test('annule le statut de façon atomique si la synchronisation des lignes échoue', async ({ assert }) => {
+		const transactions = new TransactionManager();
+		const orders = new OrderRepository(transactions, testSchema);
+		const create = new CreateOrder(orders, transactions);
+		const created = await create.execute({ serviceType: 'Takeaway' });
+		assert.isTrue(created.ok);
+
+		if (!created.ok) {
+			return;
+		}
+
+		const add = new AddOrderLine(orders, transactions);
+		assert.isTrue(
+			(
+				await add.execute({
+					orderId: created.value.id,
+					menuItemId: tableId,
+					name: 'Pizza',
+					quantity: 1,
+					unitPriceCents: 1250,
+				})
+			).ok,
+		);
+
+		await sql
+			.raw(
+				`CREATE FUNCTION "${testSchema}".fail_order_line_update() RETURNS trigger LANGUAGE plpgsql AS 'BEGIN RAISE EXCEPTION ''forced order line update failure''; END;'`,
+			)
+			.execute(db);
+		await sql
+			.raw(
+				`CREATE TRIGGER fail_order_line_update BEFORE UPDATE ON "${testSchema}".order_lines FOR EACH ROW EXECUTE FUNCTION "${testSchema}".fail_order_line_update()`,
+			)
+			.execute(db);
+
+		try {
+			await assert.rejects(
+				() => new CancelOrder(orders, transactions).execute({ orderId: created.value.id }),
+				'forced order line update failure',
+			);
+
+			const persisted = await orders.findOrderById(created.value.getIdentifier());
+			assert.equal(persisted?.status, OrderStatus.Draft);
+		} finally {
+			await sql.raw(`DROP TRIGGER fail_order_line_update ON "${testSchema}".order_lines`).execute(db);
+			await sql.raw(`DROP FUNCTION "${testSchema}".fail_order_line_update()`).execute(db);
+		}
 	});
 
 	test('annule toute la transaction quand la persistance échoue', async ({ assert }) => {

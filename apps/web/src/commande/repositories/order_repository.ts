@@ -49,6 +49,8 @@ export class OrderRepository {
 		const lines = order.lines;
 		const database = this.transactions.currentDatabase().withSchema(this.schema);
 
+		await database.updateTable('orders').set({ status: order.status }).where('id', '=', order.id).execute();
+
 		if (lines.length === 0) {
 			await database.deleteFrom('order_lines').where('order_id', '=', order.id).execute();
 			return order;

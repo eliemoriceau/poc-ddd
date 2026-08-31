@@ -117,3 +117,36 @@ test.group('Order.addLine', () => {
 		});
 	}
 });
+
+test.group('Order.cancel', () => {
+	test('annule une commande Draft ou Confirmed', ({ assert }) => {
+		for (const status of [OrderStatus.Draft, OrderStatus.Confirmed]) {
+			const order = makeOrder(status);
+			const result = order.cancel();
+
+			assert.isTrue(result.ok);
+			assert.equal(order.status, OrderStatus.Cancelled);
+		}
+	});
+
+	test('est idempotente pour une commande déjà annulée', ({ assert }) => {
+		const order = makeOrder(OrderStatus.Cancelled);
+
+		assert.deepEqual(order.cancel(), { ok: true, value: false });
+		assert.equal(order.status, OrderStatus.Cancelled);
+	});
+
+	test('refuse une commande envoyée en cuisine sans mutation', ({ assert }) => {
+		const order = makeOrder(OrderStatus.SentToKitchen);
+
+		assert.deepEqual(order.cancel(), { ok: false, error: { type: 'order_not_cancellable' } });
+		assert.equal(order.status, OrderStatus.SentToKitchen);
+	});
+
+	test('refuse un état inconnu sans mutation', ({ assert }) => {
+		const order = makeOrder('Unknown' as OrderStatus);
+
+		assert.deepEqual(order.cancel(), { ok: false, error: { type: 'order_not_cancellable' } });
+		assert.equal(order.status, 'Unknown');
+	});
+});

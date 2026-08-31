@@ -62,6 +62,17 @@ test('ne tente pas values([]) pour un agrégat sans lignes', async ({ assert }) 
 			return {
 				withSchema() {
 					return {
+						updateTable() {
+							return {
+								set() {
+									return {
+										where() {
+											return { execute: async () => undefined };
+										},
+									};
+								},
+							};
+						},
 						deleteFrom() {
 							return {
 								where() {
